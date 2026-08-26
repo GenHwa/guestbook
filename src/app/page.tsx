@@ -1,69 +1,212 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTheme } from "@/lib/useTheme";
+import Header from "@/components/Header";
+import Masthead from "@/components/Masthead";
+import FilterTabs, { type SortKey } from "@/components/FilterTabs";
+import Composer from "@/components/Composer";
+import MessageCard from "@/components/MessageCard";
+import RightSidebar from "@/components/RightSidebar";
+import BottomNav from "@/components/BottomNav";
+import { ArrowUpIcon, XIcon } from "@/components/icons";
+import {
+  CURRENT_USER,
+  INITIAL_MESSAGES,
+  type Message,
+  type Paper,
+} from "@/lib/data";
+
+export default function Page() {
+  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [theme, toggleTheme] = useTheme();
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [query, setQuery] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [showTop, setShowTop] = useState(false);
+
+  /* 맨 위로 버튼 */
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 700);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* 글쓰기 모달 */
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setModalOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [modalOpen]);
+
+  const addMessage = useCallback((text: string, paper: Paper) => {
+    setMessages((prev) => [
+      {
+        id: `m-${prev.length}-${text.length}-${paper}`,
+        no: (prev[0]?.no ?? 0) + 1,
+        author: CURRENT_USER.name,
+        handle: CURRENT_USER.handle,
+        color: CURRENT_USER.color,
+        time: "방금",
+        text,
+        paper,
+        likes: 0,
+        liked: false,
+        saved: false,
+        comments: [],
+      },
+      ...prev,
+    ]);
+    setModalOpen(false);
+    setSort("recent");
+    setQuery("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const toggleLike = useCallback((id: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, liked: !m.liked, likes: m.likes + (m.liked ? -1 : 1) }
+          : m
+      )
+    );
+  }, []);
+
+  const toggleSave = useCallback((id: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, saved: !m.saved } : m))
+    );
+  }, []);
+
+  const addComment = useCallback((id: string, text: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              comments: [
+                ...m.comments,
+                {
+                  id: `c-${m.id}-${m.comments.length}`,
+                  author: CURRENT_USER.name,
+                  color: CURRENT_USER.color,
+                  text,
+                  time: "방금",
+                },
+              ],
+            }
+          : m
+      )
+    );
+  }, []);
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = messages;
+
+    if (q) {
+      list = list.filter(
+        (m) =>
+          m.text.toLowerCase().includes(q) ||
+          m.author.toLowerCase().includes(q) ||
+          m.handle.toLowerCase().includes(q)
+      );
+    }
+    if (sort === "popular") list = [...list].sort((a, b) => b.likes - a.likes);
+    if (sort === "paper") list = list.filter((m) => m.paper !== "plain");
+
+    return list;
+  }, [messages, query, sort]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-dvh bg-bg">
+      <Header
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onCompose={() => setModalOpen(true)}
+        query={query}
+        onQuery={setQuery}
+      />
+
+      <div className="mx-auto flex max-w-[940px] gap-14 px-5 pb-24 lg:pb-16">
+        <main className="w-full min-w-0 max-w-[560px]">
+          <Masthead count={messages.length} />
+          <Composer onSubmit={addMessage} />
+          <FilterTabs value={sort} onChange={setSort} />
+
+          {shown.length === 0 ? (
+            <p className="py-20 text-center text-[13.5px] text-muted">
+              {query ? `‘${query}’에 대한 글이 없어요.` : "아직 글이 없어요."}
+            </p>
+          ) : (
+            shown.map((m) => (
+              <MessageCard
+                key={m.id}
+                message={m}
+                onToggleLike={toggleLike}
+                onToggleSave={toggleSave}
+                onComment={addComment}
+              />
+            ))
+          )}
+
+          {shown.length > 0 && (
+            <p className="py-10 text-center text-[12.5px] text-muted">
+              여기까지입니다. 읽어 주셔서 고맙습니다.
+            </p>
+          )}
+        </main>
+
+        <RightSidebar messages={messages} />
+      </div>
+
+      <BottomNav onCompose={() => setModalOpen(true)} />
+
+      {showTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="맨 위로"
+          className="animate-rise fixed bottom-[68px] right-5 z-30 grid size-10 place-items-center rounded-full border border-line bg-surface text-ink-soft shadow-sm transition hover:text-ink active:scale-90 lg:bottom-8"
+        >
+          <ArrowUpIcon size={17} />
+        </button>
+      )}
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto bg-ink/45 p-5 pt-[12vh] backdrop-blur-[2px]"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="animate-rise mx-auto w-full max-w-[560px]"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-serif-ko text-[15px] font-bold text-bg">
+                한 마디 남기기
+              </h2>
+              <button
+                onClick={() => setModalOpen(false)}
+                aria-label="닫기"
+                className="grid size-8 place-items-center rounded-md text-bg/70 transition hover:bg-white/10 active:scale-90"
+              >
+                <XIcon size={18} />
+              </button>
+            </div>
+            <Composer
+              autoFocus
+              onSubmit={addMessage}
+              onClose={() => setModalOpen(false)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
         </div>
-      </main>
+      )}
     </div>
   );
 }
