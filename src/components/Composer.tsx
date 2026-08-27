@@ -3,18 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import Avatar from "./Avatar";
 import { SmileIcon } from "./icons";
-import { CURRENT_USER, PAPERS, type Paper } from "@/lib/data";
+import { useAuth } from "@/lib/useAuth";
+import { PAPERS, type Paper } from "@/lib/data";
 
 const MAX = 300;
 const EMOJI = ["☺️", "🌿", "☕", "✍️", "🌙", "🍀"];
 
 type Props = {
   onSubmit: (text: string, paper: Paper) => void;
+  /** 로그인하지 않은 채로 글을 쓰려 할 때 */
+  onRequireLogin: () => void;
   autoFocus?: boolean;
   onClose?: () => void;
 };
 
-export default function Composer({ onSubmit, autoFocus, onClose }: Props) {
+export default function Composer({
+  onSubmit,
+  onRequireLogin,
+  autoFocus,
+  onClose,
+}: Props) {
+  const { user, loading } = useAuth();
   const [text, setText] = useState("");
   const [paper, setPaper] = useState<Paper>("plain");
   const [open, setOpen] = useState(Boolean(autoFocus));
@@ -44,10 +53,40 @@ export default function Composer({ onSubmit, autoFocus, onClose }: Props) {
     onClose?.();
   }
 
+  /* 세션 확인 중 — 높이만 잡아 둔다 */
+  if (loading) {
+    return <section className="mb-8 h-[66px] rounded-lg border border-line bg-surface" />;
+  }
+
+  /* 로그인해야 쓸 수 있다 */
+  if (!user) {
+    return (
+      <section className="mb-8 rounded-lg border border-line bg-surface">
+        <button
+          onClick={onRequireLogin}
+          className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-surface-2/50"
+        >
+          <span
+            aria-hidden
+            className="grid size-[34px] shrink-0 place-items-center rounded-[11px] border border-dashed border-line text-[15px] text-muted"
+          >
+            ?
+          </span>
+          <span className="text-[14.5px] text-muted">
+            로그인하고 한 마디 남겨 주세요.
+          </span>
+          <span className="ml-auto shrink-0 text-[13px] font-medium text-accent">
+            로그인
+          </span>
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className="mb-8 rounded-lg border border-line bg-surface">
       <div className="flex items-start gap-3 p-4">
-        <Avatar color={CURRENT_USER.color} name={CURRENT_USER.name} size={34} />
+        <Avatar color={user.color} name={user.displayName} size={34} />
 
         <div className="min-w-0 flex-1">
           <div

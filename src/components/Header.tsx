@@ -1,5 +1,6 @@
 "use client";
 
+import UserMenu from "./UserMenu";
 import { MoonIcon, PenIcon, SearchIcon, SunIcon } from "./icons";
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
   onCompose: () => void;
   query: string;
   onQuery: (v: string) => void;
+  onLogin: () => void;
 };
 
 export default function Header({
@@ -16,6 +18,7 @@ export default function Header({
   onCompose,
   query,
   onQuery,
+  onLogin,
 }: Props) {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur-md">
@@ -56,6 +59,8 @@ export default function Header({
           <PenIcon size={15} />
           <span className="hidden sm:inline">글쓰기</span>
         </button>
+
+        <UserMenu onLogin={onLogin} />
       </div>
     </header>
   );

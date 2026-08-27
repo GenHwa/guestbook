@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/lib/useTheme";
+import { useAuth } from "@/lib/useAuth";
 import Header from "@/components/Header";
 import Masthead from "@/components/Masthead";
 import FilterTabs, { type SortKey } from "@/components/FilterTabs";
@@ -9,21 +10,31 @@ import Composer from "@/components/Composer";
 import MessageCard from "@/components/MessageCard";
 import RightSidebar from "@/components/RightSidebar";
 import BottomNav from "@/components/BottomNav";
+import AuthDialog from "@/components/AuthDialog";
 import { ArrowUpIcon, XIcon } from "@/components/icons";
-import {
-  CURRENT_USER,
-  INITIAL_MESSAGES,
-  type Message,
-  type Paper,
-} from "@/lib/data";
+import { INITIAL_MESSAGES, type Message, type Paper } from "@/lib/data";
 
 export default function Page() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [theme, toggleTheme] = useTheme();
   const [sort, setSort] = useState<SortKey>("recent");
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [showTop, setShowTop] = useState(false);
+
+  /** 로그인이 필요한 동작을 감싼다. 비로그인이면 로그인 창을 연다. */
+  const requireLogin = useCallback(
+    (action: () => void) => {
+      if (!user) {
+        setAuthOpen(true);
+        return;
+      }
+      action();
+    },
+    [user],
+  );
 
   /* 맨 위로 버튼 */
   useEffect(() => {
@@ -45,13 +56,18 @@ export default function Page() {
   }, [modalOpen]);
 
   const addMessage = useCallback((text: string, paper: Paper) => {
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
     setMessages((prev) => [
       {
         id: `m-${prev.length}-${text.length}-${paper}`,
         no: (prev[0]?.no ?? 0) + 1,
-        author: CURRENT_USER.name,
-        handle: CURRENT_USER.handle,
-        color: CURRENT_USER.color,
+        author: user.displayName,
+        handle: user.username,
+        color: user.color,
+        verified: user.isOwner,
         time: "방금",
         text,
         paper,
@@ -66,45 +82,58 @@ export default function Page() {
     setSort("recent");
     setQuery("");
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, []);
+  }, [user]);
 
-  const toggleLike = useCallback((id: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, liked: !m.liked, likes: m.likes + (m.liked ? -1 : 1) }
-          : m
-      )
-    );
-  }, []);
+  const toggleLike = useCallback(
+    (id: string) =>
+      requireLogin(() =>
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? { ...m, liked: !m.liked, likes: m.likes + (m.liked ? -1 : 1) }
+              : m
+          )
+        )
+      ),
+    [requireLogin]
+  );
 
-  const toggleSave = useCallback((id: string) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, saved: !m.saved } : m))
-    );
-  }, []);
+  const toggleSave = useCallback(
+    (id: string) =>
+      requireLogin(() =>
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, saved: !m.saved } : m))
+        )
+      ),
+    [requireLogin]
+  );
 
-  const addComment = useCallback((id: string, text: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? {
-              ...m,
-              comments: [
-                ...m.comments,
-                {
-                  id: `c-${m.id}-${m.comments.length}`,
-                  author: CURRENT_USER.name,
-                  color: CURRENT_USER.color,
-                  text,
-                  time: "방금",
-                },
-              ],
-            }
-          : m
-      )
-    );
-  }, []);
+  const addComment = useCallback(
+    (id: string, text: string) =>
+      requireLogin(() => {
+        if (!user) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  comments: [
+                    ...m.comments,
+                    {
+                      id: `c-${m.id}-${m.comments.length}`,
+                      author: user.displayName,
+                      color: user.color,
+                      text,
+                      time: "방금",
+                    },
+                  ],
+                }
+              : m
+          )
+        );
+      }),
+    [requireLogin, user]
+  );
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -129,15 +158,19 @@ export default function Page() {
       <Header
         theme={theme}
         onToggleTheme={toggleTheme}
-        onCompose={() => setModalOpen(true)}
+        onCompose={() => requireLogin(() => setModalOpen(true))}
         query={query}
         onQuery={setQuery}
+        onLogin={() => setAuthOpen(true)}
       />
 
       <div className="mx-auto flex max-w-[940px] gap-14 px-5 pb-24 lg:pb-16">
         <main className="w-full min-w-0 max-w-[560px]">
           <Masthead count={messages.length} />
-          <Composer onSubmit={addMessage} />
+          <Composer
+            onSubmit={addMessage}
+            onRequireLogin={() => setAuthOpen(true)}
+          />
           <FilterTabs value={sort} onChange={setSort} />
 
           {shown.length === 0 ? (
@@ -166,7 +199,7 @@ export default function Page() {
         <RightSidebar messages={messages} />
       </div>
 
-      <BottomNav onCompose={() => setModalOpen(true)} />
+      <BottomNav onCompose={() => requireLogin(() => setModalOpen(true))} />
 
       {showTop && (
         <button
@@ -202,11 +235,14 @@ export default function Page() {
             <Composer
               autoFocus
               onSubmit={addMessage}
+              onRequireLogin={() => setAuthOpen(true)}
               onClose={() => setModalOpen(false)}
             />
           </div>
         </div>
       )}
+
+      {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} />}
     </div>
   );
 }
