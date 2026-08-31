@@ -1,36 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "./Avatar";
-import { SmileIcon } from "./icons";
-import { useAuth } from "@/lib/useAuth";
-import { PAPERS, type Paper } from "@/lib/data";
+import { ImageIcon, SmileIcon, XIcon } from "./icons";
+import { CURRENT_USER, PAPERS, type Paper } from "@/lib/data";
 
 const MAX = 300;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const EMOJI = ["☺️", "🌿", "☕", "✍️", "🌙", "🍀"];
 
 type Props = {
-  onSubmit: (text: string, paper: Paper) => void;
-  /** 로그인하지 않은 채로 글을 쓰려 할 때 */
-  onRequireLogin: () => void;
+  onSubmit: (formData: FormData) => void;
   autoFocus?: boolean;
   onClose?: () => void;
+  pending?: boolean;
 };
 
-export default function Composer({
-  onSubmit,
-  onRequireLogin,
-  autoFocus,
-  onClose,
-}: Props) {
-  const { user, loading } = useAuth();
+export default function Composer({ onSubmit, autoFocus, onClose, pending }: Props) {
   const [text, setText] = useState("");
   const [paper, setPaper] = useState<Paper>("plain");
+  const [image, setImage] = useState<File | null>(null);
+  const [imageError, setImageError] = useState("");
   const [open, setOpen] = useState(Boolean(autoFocus));
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const expanded = open || text.length > 0;
+  const expanded = open || text.length > 0 || Boolean(image);
   const styled = paper !== "plain";
+  const imagePreview = useMemo(
+    () => (image ? URL.createObjectURL(image) : ""),
+    [image]
+  );
 
   useEffect(() => {
     if (autoFocus) ref.current?.focus();
@@ -43,50 +43,62 @@ export default function Composer({
     el.style.height = `${Math.max(styled ? 150 : 46, el.scrollHeight)}px`;
   }, [text, styled, expanded]);
 
+  useEffect(() => {
+    if (!imagePreview) return;
+    return () => URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
+
   function submit() {
     const value = text.trim();
-    if (!value) return;
-    onSubmit(value, paper);
+    if (!value || pending) return;
+    const formData = new FormData();
+    formData.set("text", value);
+    formData.set("paper", paper);
+    if (image) formData.set("image", image);
+    onSubmit(formData);
     setText("");
     setPaper("plain");
+    setImage(null);
+    setImageError("");
+    if (fileRef.current) fileRef.current.value = "";
     setOpen(false);
     onClose?.();
   }
 
-  /* 세션 확인 중 — 높이만 잡아 둔다 */
-  if (loading) {
-    return <section className="mb-8 h-[66px] rounded-lg border border-line bg-surface" />;
+  function selectImage(file: File | undefined) {
+    setImageError("");
+
+    if (!file) {
+      setImage(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setImageError("이미지 파일만 선택해 주세요.");
+      setImage(null);
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError("이미지는 5MB 이하로 선택해 주세요.");
+      setImage(null);
+      return;
+    }
+
+    setImage(file);
+    setOpen(true);
   }
 
-  /* 로그인해야 쓸 수 있다 */
-  if (!user) {
-    return (
-      <section className="mb-8 rounded-lg border border-line bg-surface">
-        <button
-          onClick={onRequireLogin}
-          className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-surface-2/50"
-        >
-          <span
-            aria-hidden
-            className="grid size-[34px] shrink-0 place-items-center rounded-[11px] border border-dashed border-line text-[15px] text-muted"
-          >
-            ?
-          </span>
-          <span className="text-[14.5px] text-muted">
-            로그인하고 한 마디 남겨 주세요.
-          </span>
-          <span className="ml-auto shrink-0 text-[13px] font-medium text-accent">
-            로그인
-          </span>
-        </button>
-      </section>
-    );
+  function clearImage() {
+    setImage(null);
+    setImageError("");
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
     <section className="mb-8 rounded-lg border border-line bg-surface">
       <div className="flex items-start gap-3 p-4">
-        <Avatar color={user.color} name={user.displayName} size={34} />
+        <Avatar color={CURRENT_USER.color} name={CURRENT_USER.name} size={34} />
 
         <div className="min-w-0 flex-1">
           <div
@@ -118,6 +130,28 @@ export default function Composer({
 
           {expanded && (
             <div className="animate-rise mt-4">
+              {imagePreview && (
+                <div className="mb-4 overflow-hidden rounded-md border border-line">
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imagePreview}
+                      alt="첨부 이미지 미리보기"
+                      className="max-h-[260px] w-full object-cover"
+                    />
+                    <button
+                      onClick={clearImage}
+                      aria-label="이미지 제거"
+                      className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-ink/70 text-white transition hover:bg-ink"
+                    >
+                      <XIcon size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {imageError && (
+                <p className="mb-3 text-[12.5px] text-like">{imageError}</p>
+              )}
               <div className="flex items-center gap-2">
                 <span className="mr-1 text-[11px] tracking-wider text-muted">
                   편지지
@@ -139,6 +173,21 @@ export default function Composer({
               </div>
 
               <div className="mt-4 flex items-center gap-0.5 border-t border-line-soft pt-3">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => selectImage(e.target.files?.[0])}
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  aria-label="이미지 업로드"
+                  title="이미지 업로드"
+                  className="grid size-7 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-ink active:scale-90"
+                >
+                  <ImageIcon size={17} />
+                </button>
                 <SmileIcon size={17} className="mr-1.5 text-muted" />
                 {EMOJI.map((e) => (
                   <button
@@ -163,10 +212,10 @@ export default function Composer({
 
                 <button
                   onClick={submit}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || pending}
                   className="h-8 rounded-md bg-accent px-4 text-[13px] font-medium text-white transition enabled:hover:opacity-85 enabled:active:scale-95 disabled:opacity-30"
                 >
-                  남기기
+                  {pending ? "저장 중" : "남기기"}
                 </button>
               </div>
             </div>

@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
 
 # next.js
 /.next/
@@ -43,3 +45,6 @@ next-env.d.ts
 # IDE
 .idea/
 .vscode/
+
+# local package manager cache
+.pnpm-store/

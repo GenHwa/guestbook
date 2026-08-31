@@ -18,12 +18,15 @@ export type Comment = {
 export type Message = {
   id: string;
   no: number;
+  userid?: number;
   author: string;
   handle: string;
   color: string;
   verified?: boolean;
+  canEdit?: boolean;
   time: string;
   text: string;
+  imageUrl?: string | null;
   paper: Paper;
   likes: number;
   liked: boolean;
